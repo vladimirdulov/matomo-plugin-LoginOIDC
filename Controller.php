@@ -393,7 +393,7 @@ class Controller extends \Piwik\Plugin\Controller
             });
             $userModel = new Model();
             $user = $userModel->getUser($providerUserId);
-            $this->linkAccount($providerUserId, $providerUserId);
+            $this->linkAccount($providerUserId, $matomoUsername);
             $this->signinAndRedirect($user, $settings);
         } else {
             throw new Exception(Piwik::translate("LoginOIDC_ExceptionUserNotFoundAndSignupDisabled"));
