@@ -276,7 +276,7 @@ class Controller extends \Piwik\Plugin\Controller
         if (empty($user)) {
             if (Piwik::isUserIsAnonymous()) {
                 // user with the remote id is currently not in our database
-                $this->signupUser($settings, $providerUserId, $result->preferred_username, $result->email);
+                $this->signupUser($settings, $providerUserId, $result->email);
             } else {
                 // link current user with the remote user
                 $this->linkAccount($providerUserId);
@@ -362,21 +362,28 @@ class Controller extends \Piwik\Plugin\Controller
      *
      * @param  SystemSettings  $settings
      * @param  string          $providerUserId   Remote user id
-     * @param  string          $matomoUserLogin  Users email address, will be used as username as well
+     * @param  string          $providerEmail    Users email address
      * @return void
      */
-    private function signupUser($settings, string $providerUserId, string $matomoUsername = null, string $matomoUserLogin = null)
+    private function signupUser($settings, string $providerUserId, string $providerEmail = null)
     {
         // only sign up user if setting is enabled
         if ($settings->allowSignup->getValue()) {
             // verify response contains email address
-            if (empty($matomoUserLogin)) {
+            if (empty($providerEmail)) {
                 throw new Exception(Piwik::translate("LoginOIDC_ExceptionUserNotFoundAndNoEmail"));
             }
-
+            if (empty($providerUserId)) {
+                throw new Exception(Piwik::translate("LoginOIDC_ExceptionUserNotFoundAndNoUserId"));
+            }
+            if ($settings->useEmailAsUsername->getValue()) {
+                $userId = $providerEmail;
+            } else {
+                $userId = $providerUserId;
+            }
             // verify email address domain is allowed to sign up
             if (!empty($settings->allowedSignupDomains->getValue())) {
-                $signupDomain = substr($matomoUserLogin, strpos($matomoUserLogin, "@") + 1);
+                $signupDomain = substr($providerEmail, strpos($matomoUserLogin, "@") + 1);
                 $allowedDomains = explode("\n", $settings->allowedSignupDomains->getValue());
                 if (!in_array($signupDomain, $allowedDomains)) {
                     throw new Exception(Piwik::translate("LoginOIDC_ExceptionAllowedSignupDomainsDenied"));
@@ -384,16 +391,16 @@ class Controller extends \Piwik\Plugin\Controller
             }
 
             // set an invalid pre-hashed password, to block the user from logging in by password
-            Access::getInstance()->doAsSuperUser(function () use ($matomoUsername, $matomoUserLogin, $result) {
-                UsersManagerApi::getInstance()->addUser($matomoUsername,
+            Access::getInstance()->doAsSuperUser(function () use ($userId, $providerEmail, $result) {
+                UsersManagerApi::getInstance()->addUser($userId,
                                                         "(disallow password login)",
-                                                        $matomoUserLogin,
+                                                        $providerEmail,
                                                         /* $_isPasswordHashed = */ true,
                                                         /* $initialIdSite = */ null);
             });
             $userModel = new Model();
-            $user = $userModel->getUser($providerUserId);
-            $this->linkAccount($providerUserId, $matomoUsername);
+            $user = $userModel->getUser($userId);
+            $this->linkAccount($providerUserId, $userId);
             $this->signinAndRedirect($user, $settings);
         } else {
             throw new Exception(Piwik::translate("LoginOIDC_ExceptionUserNotFoundAndSignupDisabled"));
